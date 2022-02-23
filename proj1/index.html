@@ -1,7 +1,178 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 1 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+
+<head>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <title>CS 184 Rasterizer</title>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+  <link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+  <link rel="stylesheet" type="text/css" href="./style.css">
+</head>
+
+
+<body>
+
+  <h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2022</h1>
+  <h1 align="middle">Project 1: Rasterizer</h1>
+  <h2 align="middle">Stephanie Shue, CS184-abn</h2>
+
+  <h2 align="middle">Overview</h2>
+  <p>Going into this project, I had no experience with rasterization. This project was thus a huge learning experience as I witnessed the rasterization pipeline firsthand. In task 1, we implement rasterization of single-color triangles with a
+    simple sampling scheme. We then move to task 2 where we introduce supersampling to antialias the rendered image. In task 3, we learn how hierarchical transforms work and use them to modify a simple skeleton. In tasks 4 and 5, we implement
+    texture mapping via pixel and level sampling. During this project, I was surprised to find that there is not one technique/a set of techniques that is superior when rasterizing and texture-mapping. For example, choosing more complex sampling
+    can mean blurring out jaggies while also sacrificing some of the sharpness of an image. Finding the right combination of techniques takes a lot of experimenting and analyzing tradeoffs!</p>
+
+  <h2 align="middle">Section I: Rasterization</h2>
+
+  <h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
+  <p> Rasterizing a single-color triangle involves checking if the center of each pixel of the image (naively) is inside the triangle. If yes, that pixel is assigned the color of the triangle - white otherwise. I calculated a bounding box around
+    the triangle, taking the max and min x and y positions using the three given vertices \(v0, v1, v2\) , to avoid checking all pixels. To test if the sample is inside the triangle, we iterate through the bounding box and at each pixel defined by
+    the point \((x, y)\) , take a sample in the center \((sx, sy) = (x + 0.5, y + 0.5)\). <br></br>We then conduct three line tests (Figure 1a): <br></br> A triangle is defined by the intersection of 3 half-planes. For all sides of the triangle, we
+    calculate the line equation and the equation for the
+    line normal to it. We then take the dot product of the normal and the vector defined by \((sx, sy)\) and the vertex of the triangle \(v_i\). If \(V \cdot N \geq 0\), we know that the angle between \(V\) and \(N\) is perpendicular or acute,
+    meaning that the
+    sample falls within one of the half-planes that intersects the triangle (or falls on an edge of the triangle). If this is true for all 3 lines, we conclude that the point is within the intersection of the 3 half-planes that forms the triangle and
+    is therefore inside the triangle.
+  </p>
+
+  <div align='middle'>
+    <img src="images/line.png" align="middle" width="500px" />
+    <figcaption align="middle">Figure 1a. Line test visualization (Lecture 2).</figcaption>
+  </div>
+  <br></br>
+  <p> The result of my implementation can be seen in Figure 1b. Note the aliasing present, which will be addressed in Task 2 with supersampling.</p>
+  <div align='middle'>
+    <img src="images/task1.png" align="middle" width="600px" />
+    <figcaption align="middle">Figure 1b. Single-color triangle rasterization (1 sample per pixel) with the pixel tool showing jaggies in skinny triangles.</figcaption>
+  </div>
+
+  <br></br>
+  <h3 align="middle">Part 2: Antialiasing triangles</h3>
+  <p> When we sample at a rate that is too low for a signal, we get frequency aliases. In order to antialias our rasterized triangles, we can increase the sampling rate or filter out high frequencies prior to sampling. Supersampling achieves the latter.  <br></br>My supersampling algorithm follows that of Task 1, but for each pixel, we iterate through subpixels whose size is defined by the sampling rate. This involves two more nested for loops and a sample buffer that is sampling rate times the size of that needed in Task 1. For each subpixel, we sample the center and check if the point is in the triangle. We store the color of the triangle or white in the sample buffer for each subpixel depending on the outcome of the test. Then, each pixel is assigned the average color of its subpixels, and we write this to the framebuffer.
+  </p>
+  <div class="figure_cont task2" align="middle">
+    <div>
+      <img src="images/task2_1.png" align="middle" width="500px" />
+      <figcaption align="middle">Figure 2a. 1 sample per pixel. Jaggies are visible and disconnected lines can be seen in the pixel inspector.</figcaption>
+    </div>
+    <div>
+      <img src="images/task2_4.png" align="middle" width="500px" />
+      <figcaption align="middle">Figure 2b. 4 samples per pixel. The disconnected lines in Fig. 2a are connected, the jaggies are slightly blurred out.</figcaption>
+    </div>
+    <div id="third">
+      <img src="images/task2_16.png" align="middle" width="500px" />
+      <figcaption align="middle">Figure 2c. 16 samples per pixel. The lines are connected and further blurred out. This figure has the least jaggies out of all three. </figcaption>
+    </div>
+  </div>
+
+  <h3 align="middle">Part 3: Transforms</h3>
+<p>For Task 3, I used the transformation matrices given in lecture to implement transforms. When editing the svg file, I made sure these matrices were multiplied in the right order, implied by the hierarchy, for the intended movements. I transformed cubeman below to do a deathdrop (in bird's eye view), a dance move where you dramatically fall on your back, a single leg crooked to the side, arms splayed. </p>
+  <div align='middle'>
+    <img src="images/deathdrop.png" align="middle" width="600px" />
+    <figcaption align="middle">Figure 3. A rainbow colored cubeman doing a deathdrop!</figcaption>
+  </div>
+
+  <h2 align="middle">Section II: Sampling</h2>
+
+  <h3 align="middle">Part 4: Barycentric coordinates</h3>
+  <p>Barycentric coordinates allow for interpolation of colors/textures/etc. of points within a triangle. Each coordinate in \((\alpha, \beta, \gamma)\) represents a weight based on a point's distance from one vertex of the triangle. They essentially quantify the "influence" each vertex has on a point in determining its color, texture, and more. </p>
+  <div align='middle'>
+    <img src="images/bary.png" align="middle" width="4ß00px" />
+    <figcaption align="middle">Figure 4a. Geometric interpretation of barycentric coordinates as proportional distances (Lecture 5).</figcaption>
+  </div>
+<p>This can be seen in Figure 4a, where barycentric coordinates were used to interpolate colors within the triangle. Figure 4b demonstrates this effect for a wheel composed of a triangle mesh.</p>
+
+  <div class="figure_cont task4" align="middle">
+    <div>
+      <img src="images/task4_tri.png" align="middle" width="500px" />
+      <figcaption align="middle">Figure 4b: Triangle with red, blue, and green vertices. Barycentric coordinates allow for interpolation of color for points inside the triangle depending on the distance between the point and each vertex.</figcaption>
+    </div>
+    <div>
+      <img src="images/task4_wheel.png" align="middle" width="500px" />
+      <figcaption align="middle">Figure 4c: Color wheel - basic/test7.svg with default viewing parameters and sample rate of 1. </figcaption>
+    </div>
+  </div>
+
+  <h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
+<p>Pixel sampling is when you take a sample \(x,y\) of a pixel in screen space, map it to the corresponding \(u, v\) texel in texture space, and assign the original sample the texture found at \(u, v\). Sampling rates in screen space and texture space may be equal (1:1), or vary in either direction. Figure 5 shows the case of magnification where there are multiple pixel samples per texel sample. There is also the possibility of minification where there are multiple texel samples per pixel sample. In the former case, there is insufficient resolution, and in the latter case, there will likely be aliasing. This is where different sampling techniques come into play.</p>
+<div align='middle'>
+  <img src="images/uv.png" align="middle" width="600px" />
+  <figcaption align="middle">Figure 5. Sampling rate in screen vs texture space (Lecture 5). Red dots are samples in screen space and white dots are samples in texture space.</figcaption>
+</div>
+<p>Nearest sampling is when we assign a pixel the value of the texel closest to the texture sample corresponding to the pixel's center. The resulting image is more likely to appear pixelated/not blended than when using the next technique. <br></br> Bilinear sampling involves looking at the four texels around a sample. This allows us to create a box around the sample where each corner is the center of a texel. We linearly interpolate (lerp) a value at the sample's \(u\) position for each horizontal side of the box (this totals two lerps). We do a final lerp between the two resulting values in the vertical direction, finally resulting in the interpolated texture value of our sample. This technique is more computationally heavy and slower than nearest sampling, but the resulting image is smoother with sharp edges blurred out.<br></br>The differences between the two methods can be seen in Figure 6. When the sampling rate in screen space differs drastically from the sampling rate in texture space, we can see the largest difference in these methods. We see greater aliasing/jaggies with nearest sampling than with bilinear sampling.</p>
+  <div class="figure_cont task5" align="middle">
+    <p></p>
+    <p>1 sample/pixel</p>
+    <p>16 samples/pixel</p>
+    <p>PSM: Nearest</p>
+    <div>
+      <img src="images/task5_nearest1.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 6a. Nearest sampling with a sample rate of 1. Note the aliasing on the campanile. In the pixel inspector, we can see the jaggies more clearly.</figcaption>
+    </div>
+    <div>
+      <img src="images/task5_nearest16.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 6b. Nearest sampling with a sample rate of 16. The aliasing is still present, although blended out a bit. In the pixel inspector, we can see the blending effect of supersampling.</figcaption>
+    </div>
+    <p>PSM: Bilinear</p>
+    <div>
+      <img src="images/task5_bilinear1.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 6c. Bilinear sampling with a sample rate of 1. The aliasing is worse than in 6b but better than in 6a. In the pixel inspector, we can see the gradient effect of bilinear sampling.</figcaption>
+    </div>
+    <div>
+      <img src="images/task5_bilinear16.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 6d. Bilinear sampling with a sample rate of 16. The aliasing is the least noticeable in this figure. In the pixel inspector, we can see the combined effect of bilinear sampling and supersampling - edges are softer and colors are blended a bit more seamlessly.</figcaption>
+    </div>
+  </div>
+
+
+  <h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
+<p>The ratio of screen sampling rate to texture space sampling rate may vary drastically across an image, leading to aliasing in some parts of an image and blurring in other parts. Level sampling aims to handle this situation by sampling from a texture file whose resolution matches the screen sampling rate (ideally one or a few texel samples per pixel sample). We acheive this by storing lower resolution texture files called mipmaps, which requires 1/3 more storage overhead as compared to no level sampling (sampling at level 0, full resolution by default). </p>
+<div align="middle">
+  <img src="images/dcalc.png" align="middle" width="500px" />
+  <figcaption align="middle">Figure 7. Calculation of mipmap level, D (Lecture 5).</figcaption>
+</div>
+<p>I implemented level sampling by finding \(\frac{du}{dx}, \frac{dv}{dx}, \frac{du}{dy}, \frac{dv}{dy}\) for each sample (Figure 7). From this, we can use the formula in Figure 7 to calculate mipmap level, D. For zero sampling, we just sample from the full resolution texture file. For nearest level sampling, I rounded D to the closest integer value and sampled from that mipmap. For trilinear filtering, I calculated the two closest mipmap levels, sampled from both texture files, and linearly interpolated a color from both results. The latter technique was definitely the slowest and used more memory as we have to load two mipmaps. Nearest and zero sampling were comparable in terms of memory usage and speed (nearest is slightly slower), but nearest sampling had significantly greater antialiasing power. Trilinear sampling had the best antialiasing power, especially when combined with bilinear pixel sampling. This was the most computationally heavy and memory usage heavy, requiring 8 texel reads and 7 lerps. Combined with supersampling, which increases the size of the sample buffer by the supersampling rate, this was the slowest and most intensive combination. Figure 8 below demonstrates the antialiasing power of level and pixel sampling combinations at a sample per pixel rate of 1.
+</p>
+
+
+
+  <div class="figure_cont task5" align="middle">
+    <p></p>
+    <p>PSM: Nearest</p>
+    <p>PSM: Bilinear</p>
+    <p>LSM: Zero</p>
+    <div>
+      <img src="images/task6_zero_nearest.png" align="middle" width="450px" />
+      <figcaption id="caption8a" align="middle">Figure 8a. Least antialiasing power, shown by broken lines and jaggies all over the image.</figcaption>
+    </div>
+    <div>
+      <img src="images/task6_zero_bilinear.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 8b. Harsh lines slightly blurred out as compared to 8a, and also lines are more connected in the center of the image. There are still many disconnected lines towards the edges of the figure.</figcaption>
+    </div>
+    <p>LSM: Nearest</p>
+    <div>
+      <img src="images/task6_nearest_nearest.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 8c. As we can see in the pixel inspector, the lines are slightly more blended together than in 8a and 8b. This blending is mostly happening at the sides of the image and not in the center.</figcaption>
+    </div>
+    <div>
+      <img src="images/task6_nearest_bilinear.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 8d. This combination has high antialiasing power. Nearly all lines are smoothed out. This combination achieves the same effect as 8f, except with less memory usage and computation.</figcaption>
+    </div>
+    <p>LSM: Linear</p>
+    <div>
+      <img src="images/task6_bilinear_nearest.png" align="middle" width="450px" />
+      <figcaption id="caption8e" align="middle">Figure 8e. The lines are slightly more smoothed out than in 8c, but there are still disconnected lines and jaggies, mostly towards the center.</figcaption>
+    </div>
+    <div>
+      <img src="images/task6_bilinear_bilinear.png" align="middle" width="450px" />
+      <figcaption align="middle">Figure 8f. This combination has high antialiasing power, with seemingly all lines connected and blended. This took the longest to render and is comparable to 8d.</figcaption>
+    </div>
+
+
+
+
+</body>
+
 </html>

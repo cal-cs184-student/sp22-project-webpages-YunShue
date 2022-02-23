@@ -17,13 +17,13 @@
   <h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2022</h1>
   <h1 align="middle">Project 1: Rasterizer</h1>
   <h2 align="middle">Yun Shue, CS184-abn</h2>
-
+<br></br>
   <h2 align="middle">Overview</h2>
   <p>Going into this project, I had no experience with rasterization. This project was thus a huge learning experience as I witnessed the rasterization pipeline firsthand. In task 1, we implement rasterization of single-color triangles with a
     simple sampling scheme. We then move to task 2 where we introduce supersampling to antialias the rendered image. In task 3, we learn how hierarchical transforms work and use them to modify a simple skeleton. In tasks 4 and 5, we implement
     texture mapping via pixel and level sampling. During this project, I was surprised to find that there is not one technique/a set of techniques that is superior when rasterizing and texture-mapping. For example, choosing more complex sampling
     can mean blurring out jaggies while also sacrificing some of the sharpness of an image. Finding the right combination of techniques takes a lot of experimenting and analyzing tradeoffs!</p>
-
+<br></br>
   <h2 align="middle">Section I: Rasterization</h2>
 
   <h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
@@ -66,14 +66,14 @@
       <figcaption align="middle">Figure 2c. 16 samples per pixel. The lines are connected and further blurred out. This figure has the least jaggies out of all three. </figcaption>
     </div>
   </div>
-
+<br></br>
   <h3 align="middle">Part 3: Transforms</h3>
 <p>For Task 3, I used the transformation matrices given in lecture to implement transforms. When editing the svg file, I made sure these matrices were multiplied in the right order, implied by the hierarchy, for the intended movements. I transformed cubeman below to do a deathdrop (in bird's eye view), a dance move where you dramatically fall on your back, a single leg crooked to the side, arms splayed. </p>
   <div align='middle'>
     <img src="images/deathdrop.png" align="middle" width="600px" />
     <figcaption align="middle">Figure 3. A rainbow colored cubeman doing a deathdrop!</figcaption>
   </div>
-
+<br></br>
   <h2 align="middle">Section II: Sampling</h2>
 
   <h3 align="middle">Part 4: Barycentric coordinates</h3>
@@ -94,7 +94,7 @@
       <figcaption align="middle">Figure 4c: Color wheel - basic/test7.svg with default viewing parameters and sample rate of 1. </figcaption>
     </div>
   </div>
-
+<br></br>
   <h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
 <p>Pixel sampling is when you take a sample \(x,y\) of a pixel in screen space, map it to the corresponding \(u, v\) texel in texture space, and assign the original sample the texture found at \(u, v\). Sampling rates in screen space and texture space may be equal (1:1), or vary in either direction. Figure 5 shows the case of magnification where there are multiple pixel samples per texel sample. There is also the possibility of minification where there are multiple texel samples per pixel sample. In the former case, there is insufficient resolution, and in the latter case, there will likely be aliasing. This is where different sampling techniques come into play.</p>
 <div align='middle'>
@@ -126,7 +126,7 @@
     </div>
   </div>
 
-
+<br></br>
   <h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
 <p>The ratio of screen sampling rate to texture space sampling rate may vary drastically across an image, leading to aliasing in some parts of an image and blurring in other parts. Level sampling aims to handle this situation by sampling from a texture file whose resolution matches the screen sampling rate (ideally one or a few texel samples per pixel sample). We acheive this by storing lower resolution texture files called mipmaps, which requires 1/3 more storage overhead as compared to no level sampling (sampling at level 0, full resolution by default). </p>
 <div align="middle">

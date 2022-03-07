@@ -1,7 +1,244 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 2 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+
+<head>
+	<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+	<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+	<title>CS 184 Rasterizer</title>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+	<link rel="stylesheet" type="text/css" href="./style.css">
+</head>
+
+<body>
+
+	<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2022</h1>
+	<h1 align="middle">Project 2: Mesh Editor</h1>
+	<h2 align="middle">Yun Shue, CS184-abn</h2>
+
+	<br></br>
+	<div align='middle'>
+		<img src="images/babycow.png" align="middle" width="500px" />
+	</div>
+	<br></br>
+
+	<h2 align="middle">Overview</h2>
+	<p>I had a lot of fun building up this mesh editor! We first use de Casteljau in tasks 1 and 2 to evaluate Bezier curves and surfaces, a technique that turns control points into smooth curves/surfaces. In task 3 we implement area-weighted vertex
+		normals to provide a more realistic and smooth shading as compared to flat shading. Finally, we explore how mesh upsampling converts a coarse mesh into a higher-resolution, smooth mesh. We implement remeshing operations -- edge flip and split --
+		in Tasks 4 and 5 which will be used in Task 6's loop subdivision. Loop subdivision is one way to upsample a mesh by subdividing each triangle in the mesh and updating vertices based on a weighting scheme. While doing these tasks, I learned that
+		drawing out and labeling example meshes is an important step for coding up remeshing operations. This helped immensely when tracking down pointer reassignment bugs! </p>
+
+	<h2 align="middle">Section I: Bezier Curves and Surfaces</h2>
+
+	<h3 align="middle">Part 1: Bezier curves with 1D de Casteljau subdivision</h3>
+	<p> De Casteljau subdivision is a recursive algorithm used to create smooth Bezier lines/curves from points (Fig 1). At each level of the recursion, we take \(n\) points \(p_i\) from the previous level and use linear interpolation (lerp) with
+		parameter \(t\) to derive \(n-1\) new points. $$lerp(p_{i-1}, p_i, t) = (1-t)p_i + tp_{i-1}$$
+	</p>
+
+	<div align='middle' class="border">
+		<img src="images/casteljau_1d.png" align="middle" width="600px" />
+		<figcaption align="middle">Figure 1. De Casteljau algorithm visualization (Lecture 7).</figcaption>
+	</div>
+	<p> We recurse until we have a single point. The Bezier curve is drawn through this resulting point and connects the original endpoints. See Figure 2 below.</p>
+	<div align='middle'>
+		<div class="figure_cont c2 border lines2">
+			<div>
+				<img src="images/task1_0.png" align="middle" width="400px" />
+				<figcaption align="middle">6 control points.</figcaption>
+			</div>
+			<div>
+				<img src="images/task1_1.png" align="middle" width="400px" />
+				<figcaption align="middle">First level of interpolation. Blue squares are the interpolated points.</figcaption>
+			</div>
+			<div>
+				<img src="images/task1_2.png" align="middle" width="400px" />
+				<figcaption align="middle">Second level of interpolation. </figcaption>
+			</div>
+			<div>
+				<img src="images/task1_3.png" align="middle" width="400px" />
+				<figcaption align="middle">Third level of interpolation.</figcaption>
+			</div>
+			<div>
+				<img src="images/task1_4.png" align="middle" width="400px" />
+				<figcaption align="middle">Fourth level of interpolation.</figcaption>
+			</div>
+			<div>
+				<img src="images/task1_bzc.png" align="middle" width="400px" />
+				<figcaption align="middle">Last interpolation to get final point (red). Bezier curve shown in green. </figcaption>
+			</div>
+			<figcaption id="third" align="middle">Figure 2. The result of using Casteljau subdivision to produce a Bezier curve. </figcaption>
+		</div>
+
+	</div>
+	<p> Dragging around the control points in the GUI created another curve in Figure 3.</p>
+
+	<div align="middle" class="border">
+		<img src="images/task1_diffbzc.png" align="middle" width="500px" />
+		<figcaption align="middle">Figure 3. A Bezier curve with different points and parameter \(t\) from Fig 2.</figcaption>
+	</div>
+
+	<br></br>
+	<h3 align="middle">Part 2: Bezier surfaces with separable 1D de Casteljau subdivision</h3>
+	<p> Evaluating Bezier surfaces with de Casteljau can be thought of as performing 1D de Casteljau in 2 directions (Fig 4). We have as an input a \(n x n\) array of control points. Each row in this array defines a Bezier curve with parameter \(u\).
+		We can thus use our Task 1 implementation to derive a final point for each row. With the resulting \(n\) points, we can evaluate another Bezier curve with parameter \(v\). We then finally get a single point - the point on the Bezier surface with
+		parameter \((u, v)\).
+	<div align="middle" class="border">
+		<img src="images/casteljau_2d.png" align="middle" width="500px" />
+		<figcaption align="middle">Figure 4. De Casteljau algorithm extended to 2D surfaces (Lecture 7).</figcaption>
+	</div>
+	<p>The figure below demonstrates the result of the implementation described above. </p>
+	<div align="middle" class="border">
+		<img src="images/task2.png" align="middle" width="500px" />
+		<figcaption align="middle">Figure 5. A teapot Bezier surface evaluated with 2D de Casteljau.</figcaption>
+	</div>
+	</p>
+
+	<br></br>
+	<h2 align="middle">Section II: Triangle Meshes and Half-Edge Data Structure</h2>
+
+	<h3 align="middle">Part 3: Average normals for half-edge meshes</h3>
+	<p>Area-weighted vertex normals are used in Phong shading to achieve a smoothness not possible with flat shading. We can compute this normal by noting the following: for a triangular face, taking the cross product of two edges of the face results
+		in a vector \(n\) normal to the face with a magnitude that scales with its area. Thus, to calculate an area-weighted vertex normal, we calculate \(n\) for every face incident to the vertex, sum them up, and normalize. The resulting effect is
+		shown in figure 6. </p>
+	<div align='middle'>
+		<div class="figure_cont c2 border lines3">
+			<div>
+				<img src="images/task3_before.png" align="middle" width="400px" />
+				<figcaption align="middle">Figure 6a. Teapot with flat shading. Note the hard edges between different values.</figcaption>
+			</div>
+			<div>
+				<img src="images/task3_smooth.png" align="middle" width="400px" />
+				<figcaption align="middle">Figure 6b. Teapot with Phong shading (area-weighted vertex normals). The shading appears smooth without any visible edges between values.</figcaption>
+			</div>
+		</div>
+	</div>
+		<br></br>
+
+		<h3 align="middle">Part 4: Edge flip</h3>
+		<p>I implemented the edge flip operation by following the recommended guidelines. I drew a simple mesh with every item labeled before and after an edge flip (Figure 7). In my code, I reassigned every element based on the sketch, and then deleted redundant pointer reassignments. Because of this, I had only a few minor bugs that I caught easily. </p>
+		<div align="middle" class="border">
+			<img src="images/flip_sketch.png" align="middle" width="400px" />
+			<figcaption align="middle">Figure 7. Sketch of mesh before and after flip.</figcaption>
+		</div>
+		<p>The result of various edge flips on a mesh can be seen in the figure below.</p>
+		<div align='middle'>
+			<div class="figure_cont c2 border">
+				<div>
+					<img src="images/task4_before.png" align="middle" width="450px" />
+					<figcaption align="middle">Figure 8a. Teapot mesh without any flips.</figcaption>
+				</div>
+				<div>
+					<img src="images/task4_flipped.png" align="middle" width="450px" />
+					<figcaption align="middle">Figure 8b. Teapot mesh after some flips.</figcaption>
+				</div>
+			</div>
+		</div>
+		<br></br>
+		<h3 align="middle">Part 5: Edge split</h3>
+		<p>I implemented edge split similarly to edge flip. I once again sketched a mesh before and after a split and assigned pointers accordingly (Figure 9). I also implemented the extra credit task of handling boundaries. I ran into quite a few bugs here because I tried to skip the sketch portion and could not track pointers as effectively. I finally ended up drawing out the boundary case as well, and was able to get it working properly.</p>
+		<div align="middle" class="border">
+			<img src="images/split_sketch.png" align="middle" width="400px" />
+			<figcaption align="middle">Figure 9. Sketch of mesh before and after split.</figcaption>
+		</div>
+		<p>Figure 10 below demonstrates the effect of both edge flips and splits on a mesh.<p>
+			<div align='middle'>
+				<div class="figure_cont c2 border lines2">
+					<div>
+						<img src="images/task5_before.png" align="middle" width="400px" />
+						<figcaption align="middle">Figure 10a. Beetle mesh without any altered edges.</figcaption>
+					</div>
+					<div>
+						<img src="images/task5_split.png" align="middle" width="400px" />
+						<figcaption align="middle">Figure 10b. Beetle mesh after some splits.</figcaption>
+					</div>
+					<div>
+						<img src="images/task5_both.png" align="middle" width="400px" />
+						<figcaption align="middle">Figure 10c. Beetle mesh after some splits and flips.</figcaption>
+					</div>
+					<div>
+						<img src="images/task5_boundary.png" align="middle" width="400px" />
+						<figcaption align="middle">Figure 10d. Beetle mesh boundary after some boundary edge splits.</figcaption>
+					</div>
+				</div>
+			</div>
+
+		<br></br>
+		<h3 align="middle">Part 6: Loop subdivision</h3>
+		<p>Loop subdivision is one technique that allows us to upsample meshes. We subdivide each triangle in the mesh into 4 smaller triangles by splitting then flipping edges (Figure 11a). We then update vertices based on a weighting scheme mentioned in the spec. I followed the spec recommendations for implementing this procedure: I computed new vertex positions using the original mesh, subdivided via splits and flips, and finally updated all vertex positions. I additionally handled the extra credit boundary case (Figure 14), using the weighting scheme for creases and boundaries discussed in lecture (Figure 11b). </p>
+		<div align='middle'>
+			<div class="figure_cont c2 border lines2">
+				<div>
+					<img src="images/loop_proc.png" align="middle" width="400px" />
+					<figcaption align="middle">Figure 11a. Loop subdivision procedure visualization (Lecture 8).</figcaption>
+				</div>
+				<div>
+					<img src="images/bndry_rules.png" align="middle" width="400px" />
+					<figcaption align="middle">Figure 11b. Weighting scheme for computing vertex positions on boundaries (Lecture 8).</figcaption>
+				</div>
+			</div>
+		</div>
+		<p>The effect of loop subdivision can be seen in the figures below. The overall mesh becomes smoother and appears to take up less space in some cases (Figure 12).
+		</p>
+		<div align='middle'>
+			<div class="figure_cont c2 border">
+				<div>
+					<img src="images/task6_orig_cube.png" align="middle" width="400px" />
+					<figcaption align="middle">Original cube mesh prior to loop subdivision.</figcaption>
+				</div>
+				<div>
+					<img src="images/task6_asymm.png" align="middle" width="400px" />
+					<figcaption align="middle">Cube mesh after four subdivisions.</figcaption>
+				</div>
+					<figcaption id="third" align="middle">Figure 12. Cube mesh without any pre-processing. </figcaption>
+			</div>
+		</div>
+		<p>Corners and sharp edges are rounded out, although don't completely disappear. This may be because the corners are extraordinary points (vertices that have a degree other than 6) and stands out from the rest of the mesh in the example below. I tried to ameliorate this by splitting edges so that the corners did have a degree of 6. The corners were smoothed out, although the way I split edges created extraordinary points elsewhere in the mesh (Figure 13).</p>
+		<div align='middle'>
+			<div class="figure_cont c2 border lines2">
+				<div>
+					<img src="images/task6_part_smooth.png" align="middle" width="400px" />
+					<figcaption align="middle">Cube mesh with edge splits described above.</figcaption>
+				</div>
+				<div>
+					<img src="images/task6_smooth_corner.png" align="middle" width="400px" />
+					<figcaption align="middle">After four subdivisions. Notice the new extraordinary points at the center of the cube edges.</figcaption>
+				</div>
+					<figcaption id="third" align="middle">Figure 13. Cube mesh with pre-processing to smooth corners. </figcaption>
+			</div>
+		</div>
+		<p> Additionally, notice how in Figure 12 the cube subdivides asymmetrically. This is because the mesh is not regular - the corner vertices have different degrees. For a good mesh, we should try to have regular vertex degrees, which contributes to better triangle shape and a better outcome for loop subdivision. I split edges so that every vertex has a degree of six except for the vertex at the center of each face which ended up having a degree of four (Figure 13). This made the cube symemtrical during loop subdivision.
+		</p>
+		<div align='middle'>
+			<div class="figure_cont c2 border lines2">
+				<div>
+					<img src="images/task6_part_symm.png" align="middle" width="400px" />
+					<figcaption align="middle">Cube mesh with edge splits described above.</figcaption>
+				</div>
+				<div>
+					<img src="images/task6_symm.png" align="middle" width="400px" />
+					<figcaption align="middle">After four subdivisions.</figcaption>
+				</div>
+					<figcaption id="third" align="middle">Figure 14. Cube mesh with pre-processing to make subdivision symmetrical. </figcaption>
+			</div>
+		</div>
+		<p> For the extra credit task of handling boundaries, I added a check for if the vertex was on a boundary in the compute vertex position helper methods. I then used the alternate weighting scheme (Figure 11b). The result can be seen below.
+		</p>
+		<div align='middle'>
+			<div class="figure_cont c2 border lines2">
+				<div>
+					<img src="images/task6_ec_before.png" align="middle" width="450px" />
+					<figcaption align="middle">Original beetle mesh prior to subdivision.</figcaption>
+				</div>
+				<div>
+					<img src="images/task6_ec_after.png" align="middle" width="450px" />
+					<figcaption align="middle">Beetle mesh after two subdivisions.</figcaption>
+				</div>
+			</div>
+		</div>
+
+
+
+</body>
+
 </html>

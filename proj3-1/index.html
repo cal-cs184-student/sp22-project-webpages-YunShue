@@ -1,7 +1,419 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 3-1 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+
+<head>
+	<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+	<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+	<title>CS 184 Pathtracer Part 1</title>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+	<link rel="stylesheet" type="text/css" href="./style.css">
+</head>
+
+<body>
+
+	<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2022</h1>
+	<h1 align="middle">Project 3-1: Pathtracer</h1>
+	<h2 align="middle">Yun Shue, CS184-abn</h2>
+
+	<br></br>
+	<div align='middle'>
+		<img src="images/cover.png" align="middle" width="300px" />
+	</div>
+	<br></br>
+
+	<h2 align="middle">Overview</h2>
+	<p>This project was a long road of debugging, but very rewarding in the end! In parts 1, 2, and 3, we built the groundwork for implementing a global illumination algorithm via pathtracing. Part 1 required using a transform to generate camera rays
+		and to test if generated rays intersected with triangle and sphere primitives. This resulted in a simple raytracing scheme. In Part 2, we create a bounding volume hierarchy - one optimization on the naive raytracing algorithm - that sped up
+		rendering time exponentially. I not only tested the performance of splitting by average centroid of primitives, but also splitting via Surface Area Heuristic (SAH). The performance improvement of SAH compared to the averaging scheme was most
+		noticeable for more complicated renders. In Part 3, we implemented direct illumination, involving calculating diffuse BSDF and performing both uniform hemisphere and importance sampling. We finally recursively add radiance from more than one ray
+		bounce in Part 4, completing our implementation of global illumination. We optimize this algorithm which can take longer to converge in some parts of the image than others by using adaptive sampling in Part 5. Because each task relied heavily on
+		the prior, I've learned how to debug more effectively. I had a lot of bugs that I failed to catch in previous sections that interfered with renderings in later sections. To debug, I reverted to naive solutions in other tasks to isolate which task
+		the bug was coming from. Overall, this allowed me to appreciate the function and importance of each section in the larger rendering pipeline.</p>
+
+	<h2 align="middle">Part I: Ray Generation and Scene Intersection</h2>
+
+	<p> In this part we implement the elementary parts of the rendering pipeline: ray generation and primitive intersection. These methods are called by the functionality implemented later on. In order to generate rays in camera space, we first
+		transform image coordinates to their corresponding coordinates on a virtual camera sensor in camera space. I calculated the transform matrix using Coordinate System Transform. This matrix is of the form \[\begin{bmatrix}
+		\boldsymbol{u} & \boldsymbol{v} & \boldsymbol{o}\\
+		0 & 0 & 1\end{bmatrix}\] where \(\boldsymbol{u}\) and \(\boldsymbol{v}\) are the unit axes of the camera coordinate frame and \(\boldsymbol{o}\) is the origin of the camera frame. Thus, the camera coordinate for image coordinate \((x, y)\) is
+		$$\begin{bmatrix}
+		c_x\\c_y\\-1\end{bmatrix} = \begin{bmatrix}
+		2\tan (0.5\times hFov) & 0 & -\tan (0.5\times hFov)\\
+		0 & 2\tan (0.5\times vFov) & -\tan (0.5\times vFov)\\
+		0 & 0 & 1\end{bmatrix}\begin{bmatrix}
+		x\\y\\-1\end{bmatrix}$$ (Since the camera sensor lies in the \(Z = -1\) plane, we replace the 1 in the homogenous coordinate \((x, y, 1)\) with a -1 to simplify calculations.) We transform this vector once again but this time from camera space to
+		world space and normalize to get the ray direction \(\boldsymbol{d}\). We set the ray's origin \(\boldsymbol{o}\) to the given camera position in world space. The min and max \(t\) values are set to \(nClip\) and \(fClip\), respectively.
+		<br></br>
+		After ensuring that rays are generated correctly, I implemented raytrace_pixel. For this, we use a grid sampler to get random offsets within a unit square. This allows us to randomly sample image coordinates within a pixel and generate num_sample
+		random rays. These rays are then used to produce a Monte Carlo estimate of the radiance over a pixel.
+		<br></br>
+	<div class='fig'>
+		<div class="figure_cont c2 lines2">
+			<div class="border">
+				<img src="images/MT.png" align="middle" width="400" height="300" />
+				<figcaption align="middle">Figure 1a. Ray intersection with triangle Möller-Trumbore algorithm (Lecture 9).</figcaption>
+			</div>
+			<div class="border">
+				<img src="images/isect_sphere.png" align="middle" width="400" height="300" />
+				<figcaption align="middle">Figure 1b. Ray intersection with sphere description (Lecture 9).</figcaption>
+			</div>
+		</div>
+	</div>
+	<br></br>
+	I used the Möller-Trumbore Algorithm (Fig. 1a) to calculate ray-triangle intersection, which returns \(t\) and barycentric coordinates \(b_1\) and \(b_2\). The third barycentric coordinate can be calculated as \(b_3 = 1-b_1-b_2\). This algorithm
+	optimizes the process of calculating ray-plane intersection followed by ray-triangle intersection. A valid intersection only occurs if \(t\) is between the ray's min_t and max_t inclusive, and all barycentric coordinates are between 0 and 1
+	inclusive. If there is an intersection, we update the ray's max_t to \(t\) (doing this will ensure in part 2 that we get the closest primitive intersection in a bounding volume). <br></br>
+	For ray-sphere intersection, I used the quadratic formula to calculate if the ray has 0, 1, or 2 intersections (represented by at least one value for \(t\)) with the sphere (Fig. 1b). \(t\) has the same parameters for validity as ray-triangle
+	intersection. If there is at least one valid \(t\) value, there is an intersection with the sphere. If there are two valid values for \(t\), we set the ray's max_t to the smaller (closer) value. <br></br>
+	Figure 2 shows the results of the above raytracing implementation.
+	</p>
+	<div class='fig'>
+		<div class="figure_cont c2 border">
+			<div>
+				<img src="images/p1/p1_CBspheres.png" align="middle" />
+				<figcaption align="middle">CBspheres.dae.</figcaption>
+			</div>
+			<div>
+				<img src="images/p1/p1_CBcoil.png" align="middle" />
+				<figcaption align="middle">CBcoil.dae</figcaption>
+			</div>
+			<div>
+				<img src="images/p1/p1_bench.png" align="middle" />
+				<figcaption align="middle">bench.dae</figcaption>
+			</div>
+			<div>
+				<img src="images/p1/p1_CBbunny.png" align="middle" />
+				<figcaption align="middle">CBbunny.dae</figcaption>
+			</div>
+			<figcaption id="third" align="middle">Figure 2. Some dae files rendered with normal shading. </figcaption>
+		</div>
+	</div>
+	<br></br>
+	<h2 align="middle">Part 2: Bounding Volume Hierarchy</h2>
+
+	<p>Our Part 1 raytracing algorithm runs in linear time. This is fine for small images but quickly becomes infeasable as we add more primitives. Therefore, we can construct a bounding volume hierarchy (BVH) to split the mesh's primitives into
+		several bounding boxes. Thus, when we check if a ray intersects with a primitive, we check if it intersects with the primitive's bounding box. We only perform ray-primitive intersection tests for the primitives in the bounding boxes intersected
+		by the ray. Raytracing with a BVH runs in logarithmic time - a huge improvement!<br></br>
+		BVH has a binary tree structure. Internal nodes store a bounding box and left and right pointers to children nodes. Leaf nodes store a bounding box and a list of primitives in that bounding box. In our implementation, we use iterators pointing to
+		a list of all the primitives instead of making new vectors. Thus, each leaf stores a start and end iterator instead of a list of primitives. Because the BVH is a binary tree, this lends to using recursive construction and traversal algorithms.
+		For construction, at each recursive level, we decide whether or not to split a bounding box, further partitioning the primitives. We split if there are more than max_leaf_size primitives in the list and if our split results in non-empty left and
+		right nodes. If we decide to split, we find the axis for which the node's bounding box has the greatest extent and choose a splitting point along this axis. There are a few splitting heuristics we can use - I implemented splitting based on
+		average centroid value and based on SAH (comparision below). For the average method, I simply make the split point the average of the primitives' centroids with respect to the chosen axis. The SAH method is much more involved and will be
+		explained below. Because we don't make any new lists, to split primitives, I used std::partition, a method that sorts a vector so that all elements that satisfy a criterion are moved to the front of the list. This method returns an iterator
+		pointing to the partition in the list. I then recursively create left and right child nodes, using this partition iterator as the left node's end iterator and the right node's start iterator.<br></br>
+	<div class='fig'>
+		<div class="figure_cont c2 border">
+			<div>
+				<img src="images/p2/p2_cow.png" align="middle" width="480" />
+				<figcaption align="middle">cow.dae, 5856 primitives.</figcaption>
+			</div>
+			<div>
+				<img src="images/p2/p2_maxplanck.png" align="middle" width="480" />
+				<figcaption align="middle">maxplanck.dae, 50,801 primitives</figcaption>
+			</div>
+			<div>
+				<img src="images/p2/p2_CBdragon_micro.png" align="middle" width="480" />
+				<figcaption align="middle">CBdragon_microfacet_au.dae, 100,012 primitives.</figcaption>
+			</div>
+			<div>
+				<img src="images/p2/p2_CBlucy.png" align="middle" width="480" />
+				<figcaption align="middle">CBlucy.dae, 133,796 primitives.</figcaption>
+			</div>
+			<div id="third">
+				<img src="images/p2/p2_walle.png" align="middle" width="480" />
+				<figcaption align="middle">wall_e.dae, 240,326 primitives.</figcaption>
+			</div>
+			<figcaption id="third" align="middle">Figure 3. Large dae files rendered with BVH and normal shading (default settings). </figcaption>
+		</div>
+	</div>
+	<br></br>
+	<b>Extra Credit:</b> For SAH implementation, I followed the algorithm described in Physically Based Rendering (PBR) by Pharr and Humphreys. The idea of SAH is to calculate a cost for each possible split along an axis and return the one with the minimum
+	cost. SAH takes into consideration the ray-bbox intersection probability for each of the new left and right bboxes created by a split. This probability is the ratio of the new bbox's surface area to the enclosing bbox's surface area. SAH also
+	considers the number of triangles placed into each resulting bbox. Thus, the SAH estimates the computational cost of performing ray intersection tests, including time spent on tree traveral and time spent on ray-primitive intersection tests, for
+	each split. The cost equation is defined as: $$cost(L, R) = C_{trav} + p_L*PrimCountL + p_R*PrimCountR$$ where \(C_{trav}\) is estimated as 0.125 by PBR, \(p_L, p_R\) are the surface area ratios described prior, and PrimCount is the number of
+	primitives in the bbox.
+
+	<br></br>
+	There are \(2N-2\) possible split points for a node with \(N\) primitives, but to be more efficient, we can use a bucketing scheme to avoid testing all points. To facilitate this, I created a BucketInfo struct which defines the bbox of the bucket
+	as well as the number of primitives in the bucket. Then, at each recursive level, after getting the axis to split along, I initialize \(n\) equal-sized buckets between the left-most primitive's centroid and the right-most primitive's centroid. I
+	chose 12 buckets as that was recommended in PBR and worked well. I then calculate which bucket each primitive would be in with respect to its centroid, expand the bounds of the calculated bucket to include the entire primitive, and increment the
+	primitive count of the bucket. For each of the valid splitting points along bucket boundaries, I evaluate the SAH heuristic. If the minimum cost is less than cost of making a leaf (estimated to be the number of primitives in the node), we choose
+	the splitting point to be the partition corresponding to that minimum cost. Otherwise, we make the node a leaf node. Comparison between the naive, average, and SAH methods can be seen below.
+	</p>
+	<div class='fig'>
+		<div class="figure_cont c2 border lines2">
+			<div>
+				<img src="images/avg_bvh.png" align="middle" width="400" />
+				<figcaption align="middle">Figure 4a. BVH using average centroid heuristic.</figcaption>
+			</div>
+			<div>
+				<img src="images/sah_bvh.png" align="middle" width="400" />
+				<figcaption align="middle">Figure 4b. BVH using Surface Area Heuristic. Notice how the first division differs from that of 4a.</figcaption>
+			</div>
+		</div>
+	</div>
+	<div align="middle">
+		<table>
+		  <tr>
+				<th class="head"></th>
+		    <th>Naive</th>
+		    <th>Average Centroid</th>
+		    <th>SAH</th>
+		  </tr>
+		  <tr>
+				<td class="head"><p>cow.dae<br>(5856 prims)</p></td>
+		    <td>
+					<p>BVH Const.: <em>0.0001s</em>
+					<br>Rendering: <em>44.2243s</em>
+					<br>Isect Tests/Ray: <em>1557.59</em> </p>
+			</td>
+		    <td>
+					<p>BVH Const.: <em>0.0018s</em>
+					<br>Rendering: <em>0.0559s</em>
+					<br>Isect Tests/Ray: <em>1.38</em> </p>
+				</td>
+		    <td>
+					<p>BVH Const.: <em>0.0057s</em>
+					<br>Rendering: <em>0.0545s</em>
+					<br>Isect Tests/Ray: <em>1.32</em> </p>
+				</td>
+		  </tr>
+			<tr>
+				<td class="head"><p>maxplanck.dae<br>(50,801 prims)</p></td>
+		    <td>
+					<p>BVH Const.: <em>0.0014s</em>
+					<br>Rendering: <em>395.7846s</em>
+					<br>Isect Tests/Ray: <em>18381.12</em> </p>
+				</td>
+		    <td>
+					<p>BVH Const.: <em>0.0247s</em>
+					<br>Rendering: <em>0.0725s</em>
+					<br>Isect Tests/Ray: <em>1.76</em> </p>
+				</td>
+		    <td>
+					<p>BVH Const.: <em>0.0696s</em>
+					<br>Rendering: <em>0.0686s</em>
+					<br>Isect Tests/Ray: <em>1.63</em> </p>
+				</td>
+		  </tr>
+			<tr>
+				<td  class="head"><p>CBdragon_micro<br>facet_au.dae<br>(100,012 prims)</p></td>
+		    <td>
+					<p>BVH Const.: n/a
+					<br>Rendering: n/a
+					<br>Isect Tests/Ray: n/a</p>
+				</td>
+		    <td>
+					<p>BVH Const.: <em>0.0667s</em>
+					<br>Rendering: <em>0.0927s</em>
+					<br>Isect Tests/Ray: <em>2.79</em> </p>
+				</td>
+		    <td>
+					<p>BVH Const.: <em>0.1741s</em>
+					<br>Rendering: <em>0.0687s</em>
+					<br>Isect Tests/Ray: <em>1.64</em> </p>
+				</td>
+		  </tr>
+			<tr>
+				<td  class="head"><p>CBlucy.dae<br>(133,796 prims)</p></td>
+		    <td>
+					<p>BVH Const.: n/a
+					<br>Rendering: n/a
+					<br>Isect Tests/Ray: n/a </p>
+				</td>
+				<td>
+					<p>BVH Const.: <em>0.0747s</em>
+					<br>Rendering: <em>0.0910s</em>
+					<br>Isect Tests/Ray: <em>2.47</em> </p>
+				</td>
+		    <td>
+					<p>BVH Const.: <em>0.1972s</em>
+					<br>Rendering: <em>0.0711s</em>
+					<br>Isect Tests/Ray: <em>1.54</em> </p>
+				</td>
+		  </tr>
+			<caption>Table 1. Performance comparison for naive, average centroid, and SAH splitting methods. </caption>
+		</table>
+	</div>
+	In Table 1 above, we see that both average centroid and SAH require longer times to construct the BVH than naive, but run 800x faster than naive for cow.dae and 5800x faster for maxplanck.dae. The rendering time and intersection tests per ray grow with the mesh size for naive, but stay low for both SAH and average centroid as the number of primitives increase. The rendering time and intersection tests per ray difference between SAH and average centroid is minimal for cow.dae and maxplanck.dae. For small to medium sized meshes, it may not even be worth using SAH over average centroid due to longer BVH construction time. However, for large meshes (>100,000 primitives) such as CBdragon_microfacet_au.dae and CBlucy.dae, we see SAH perform ~60% the amount of intersection tests per ray that average centroid does, and render ~25% times faster than average centroid. For these more complex images, we perform ~2.6 intersection tests per ray with average centroid splitting - double the amount done for the smaller meshes. However, with the SAH method, we are performing around the same number of tests per ray as the smaller meshes. This makes SAH worth the extra time spent evaluating splits for images with hundreds of thousands or even millions of primitives.
+	<br></br>
+
+	<h2 align="middle">Part 3: Direct Illumination</h2>
+	<p>Before implementing direct lighting, we calculated the BSDF for diffuse materials (Fig. 4). A diffuse material scatters light equally throughout the hemisphere, which results in a constant BSDF. This can be derived by evaluating the BSDF equation (https://sakibsaikia.github.io/graphics/2019/09/10/Deriving-Lambertian-BRDF-From-First-Principles.html).
+		<div align="middle" class="border">
+			<img src="images/brdf.png" align="middle" width="500px" />
+			<figcaption align="middle">Figure 4. BSDF equation (Lecture 13). </figcaption>
+		</div>
+	 We end up with $$f_{diffuse} = \frac{radiance}{\int _{H_2} \cos \theta \,d \omega _i} = \frac{radiance}{\pi}$$
+	Now that we have Diffuse BSDF calculated, we can implement and visualize direct lighting. To do this, we need a way to determine what value to make each pixel in our final render. We do this by tracing rays from the camera through a pixel, into the scene, and seeing where it intersects primitives. The sum of the light reflected back towards the camera from every intersection point contributes to the final value of the evaluated pixel. This sum is the reflection equation in Figure 5 below and can be approximated using a Monte Carlo estimate (Fig. 5). For this estimate, we sample directions \(
+	\omega_{in}\) from some distribution (pdf) and create rays originating from the intersection or hit point (with min_t set to EPS_F to account for numerical precision issues) that corresponds with each direction. This is because the light that is reflected at a hit point is directly related to the light coming in at that point or irradiance. Because we are only considering one-bounce paths in this section, we just check if the sample ray intersects a light. If yes, we multiply the incoming radiance from that light \(L_i\) with the value of the diffuse bsdf \(f_r\) and \(\cos \theta _j\) which is just the dot product of \(\omega_{in}\) and the normal of the primitive surface, and divide by the value of the pdf. We add this contribution to \(L_r\). This repeats for each of num_samples samples, and we average \(L_r\) by num_samples at the end to get the final radiance from that hit point. I had to take extra care when implementing direct lighting to make sure that I was using world and camera coordinates when needed.
+	<div align="middle" class="border">
+		<img src="images/refeq.png" align="middle" width="500px" />
+		<figcaption align="middle">Figure 5. Reflection equation and its Monte Carlo estimate (Lecture 13). </figcaption>
+	</div>
+	As shown in the figure above, there are a few sampling methods we can choose, and in this part we implemented both uniform hemisphere sampling and importance light sampling to compare techniques. In the former method, we sample uniformly from a hemisphere which has a constant pdf of \(\frac{1}{2 \pi}\) (I divided this factor out at the end). For the latter method, we directly sample from the area or point lights in a scene, ensuring that we are only sampling directions between the hit point and a light source. The pdf is not constant in this case and needs to be divided out at each iteration. Because we are only creating sample rays between the hit point and a light, we need to check that the ray is not behind the light. We can tell that the ray is in front of the light if its \(z\) component is positive. If this check passes, we then check that the ray does not intersect anything before the light. Thus, we set the sample ray's max_t to dist_to_light (minus EPS_F again for precision issues). We perform the same calculations described above, making sure to divide by num_samples per light and adding each light contribution to the final output. To be efficient, we only sample point lights once.<br></br>The results of both methods are shown below.</p>
+	<div class='fig'>
+		<div class="figure_cont c2 border">
+			<div>
+				<img src="images/p3/p3_CBspheres_H_64_32.png" align="middle" width="480px" />
+				<figcaption align="middle">CBspheres_lambertian.dae, hemisphere sampling.</figcaption>
+			</div>
+			<div>
+				<img src="images/p3/p3_CBspheres_imp_64_32.png" align="middle" width="480px" />
+				<figcaption align="middle">CBspheres_lambertian.dae, importance sampling.</figcaption>
+			</div>
+			<div>
+				<img src="images/p3/p3_CBbunny_H_64_32.png" align="middle" width="480px" />
+				<figcaption align="middle">CBbunny.dae, hemisphere sampling.</figcaption>
+			</div>
+			<div>
+				<img src="images/p3/p3_CBbunny_imp_64_32.png" align="middle" width="480px" />
+				<figcaption align="middle">CBbunny.dae, importance sampling.</figcaption>
+			</div>
+			<figcaption id="third">Figure 6. Images rendered with direct lighting using uniform hemisphere or importance sampling, 64 samples per pixel, and 32 samples per area light. </figcaption>
+		</div>
+	</div>
+	<p>Direct lighting with either method will eventually converge to the same result. However, as seen in the figure above, uniform hemisphere sampling is inherently noiser than importance sampling and takes longer to converge. This is because a significant portion of our sampled directions don't hit a light source - we thus get many black spots contributing to noise in our render. This issue is fixed with importance sampling. In importance sampling, we only consider directions towards light sources, reducing the amount of noise in our image and producing a much smoother, nicer render.</p>
+	<div class='fig'>
+		<div class="figure_cont c2 border">
+			<div>
+				<img src="images/p3/p3_CBbunny_imp_1_1.png" align="middle" width="480px" />
+				<figcaption align="middle">1 sample per area light.</figcaption>
+			</div>
+			<div>
+				<img src="images/p3/p3_CBbunny_imp_1_4.png" align="middle" width="480px" />
+				<figcaption align="middle">4 samples per area light.</figcaption>
+			</div>
+			<div>
+				<img src="images/p3/p3_CBbunny_imp_1_16.png" align="middle" width="480px" />
+				<figcaption align="middle">16 samples per area light.</figcaption>
+			</div>
+			<div>
+				<img src="images/p3/p3_CBbunny_imp_1_64.png" align="middle" width="480px" />
+				<figcaption align="middle">64 samples per area light.</figcaption>
+			</div>
+			<figcaption id="third">Figure 7. CBbunny.dae rendered with direct lighting using importance sampling and 1 sample per pixel. </figcaption>
+		</div>
+	</div>
+	<p>As we increase the number of samples per light in the figure above, we see that the noise in soft shadows gradually decreases. We see a softer, more blended and gradient effect in the soft shadows with 64 light rays than with 1, 4, and 16 light rays. With 1 light ray, we see harsh edges - dots in the periphery of the shadow are just as dark as those towards the center. The peripheral shadow dots become lighter and blended as we add in samples per light.</p>
+	<br></br>
+	<h2 align="middle">Part 4: Global Illumination</h2>
+	<p>In this part, we finally add contribution from indirect lighting. As seen in Figure 5, the rendering equation is actually recursive and calls for a recursive algorithm. Instead of calculating \(L_i\) as emission from lights, we are now going to recursively call at_least_one_bounce_radiance to get the irradiance at a hit point. This allows us to acocunt for extra bounces so that even if a ray from the hit point does not directly intersect with a light, we still include light that reflected off of another object that contributes to the irradiance at our hit point. To prevent infinite recursion, we use russian roulette as a random and unbiased way to stop the recursion given a termination probability. I used a termination probability of 0.35. We also have a max_ray_depth which is the maximum amount of bounces the ray should make. <br></br> Thus, in at_least_one_bounce_radiance, I check if the ray depth is greater than zero. If it is, I add one_bounce_radiance to L_out. Then, if coin_flip(continuation probability = 0.65) returns true (Russion Roulette) and ray depth is greater than 1 (meaning that the incoming sample ray has a depth of at least 1), we use sample_f to get a sample direction \(\omega _{in}\) and corresponding pdf. We create a sample ray with origin as the hit point and direction as \(\omega _{in}\) in world coordinates. This sample ray has a depth of our current ray's depth minus one, and a min_t of EPS_F. We then check if this sample ray has an intersection with another object. If so, we calculate its L_out contribution as \(f_r\) times at_least_one_bounce_radiance(sample ray) times cos_theta(w_in), divided by the pdf and continuation probability. Figure 8 shows some images rendered with global illumination.</p>
+
+	<div class='fig'>
+		<div class="figure_cont c2 border lines2">
+			<div>
+				<img src="images/p4/p4_bench_G.png" align="middle" width="400px" />
+				<figcaption align="middle">bench.dae</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_walle_G.png" align="middle" width="400px" />
+				<figcaption align="middle">wall-e.dae</figcaption>
+			</div>
+				<figcaption id="third" align="middle">Figure 8. Images rendered with global illumination, max ray depth of 100, 1024 samples per pixel, and 32 samples per light. </figcaption>
+		</div>
+	</div>
+<p>We see in Figure 8 that the images appear bright, the texture on the bench is almost washed out. We can truly appreciate global illumination looking at Figure 9, however. The indirect illumination provides nice color bleeding and lighting underneath the spheres which were completely shaded with only direct illumination. As we render with both direct and indirect illumination and increase the number of bounces, we see that the scene is brightly light and dynamic. The shadows are varied and soft with color value.</p>
+	<div class='fig'>
+		<div class="figure_cont c2 border lines2">
+			<div>
+				<img src="images/p4/p4_CBspheres_direct.png" align="middle" width="400px" />
+				<figcaption align="middle">Direct illumination only</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_CBspheres_indirect.png" align="middle" width="400px" />
+				<figcaption align="middle">Indirect illumination only, max ray depth of 15.</figcaption>
+			</div>
+			<div id="third">
+				<img src="images/p4/p4_CBspheres_G.png" align="middle" width="400px" />
+				<figcaption align="middle">Global illumination, max ray depth of 100.</figcaption>
+			</div>
+				<figcaption id="third" align="middle">Figure 9. CBspheres.dae rendered with different illumination, 1024 samples per pixel, and 32 samples per light. </figcaption>
+		</div>
+	</div>
+<p> In Figure 10, we can see how the scene changes as we add one more ray bounces. With zero bounce illumination (\(m=0)\), we only get the radiance emitted by the area light. With \(m=1\), we get lighting from direct illumination. Then we start to add indirect lighting with \(m=2\). There is a stark difference in the ceiling which was previously completely dark. Now it is lit from secondary bounces. We can also see that the shadows on the bunny have significantly lightened due to contributions from light bouncing off the floor and walls. We can even see some red and blue on the bunny. Incrementing max ray depth again produces a lighter ceiling and back wall with some color. The shadows under the bunny towards the red wall are a lighter value than the shadows under the bunny on the opposite side. Finally, with a max depth of 100 bounces, we see that the scene is even brighter with a nice diffusion of color across the previously gray areas. </p>
+	<div class='fig'>
+		<div class="figure_cont c2 border lines2">
+			<div>
+				<img src="images/p4/p4_CBbunny_m0.png" align="middle" width="400px" />
+				<figcaption align="middle">max ray depth of 0</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_CBbunny_m1.png" align="middle" width="400px" />
+				<figcaption align="middle">max ray depth of 1</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_CBbunny_m2.png" align="middle" width="400px" />
+				<figcaption align="middle">max ray depth of 2</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_CBbunny_m3.png" align="middle" width="400px" />
+				<figcaption align="middle">max ray depth of 3</figcaption>
+			</div>
+			<div id="third">
+				<img src="images/p4/p4_CBbunny_m100.png" align="middle" width="400px" />
+				<figcaption align="middle">max ray depth of 100</figcaption>
+			</div>
+				<figcaption id="third" align="middle">Figure 10. CBbunny.dae rendered with global illumination, 1024 samples per pixel, 32 samples per light, and varying max ray depth. </figcaption>
+		</div>
+	</div>
+	<p> In Figure 11, we see how increasing samples per pixel serves to increase the quality of our renders. With just 1, 2, or 4 samples, the scene is so noisy that it impacts our perception of the dragon's texture. We can clearly see the edges and divets of the dragon and everything looks rough and gritty. With 16 samples, the image starts to smooth out so we can see edges clearly, although there still is some fuzziness visible. The render with 64 samples seems to be completely smooth with minimal noise, but the 1024 sample render is an even larger improvement. It has no fuzziness, the dots are smoothed out, the edges are clear, and the dragon's texture is legible. </p>
+
+	<div class='fig'>
+		<div class="figure_cont c2 border lines2">
+			<div>
+				<img src="images/p4/p4_dragon_s1.png" align="middle" width="400px" />
+				<figcaption align="middle">1 sample per pixel</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_dragon_s2.png" align="middle" width="400px" />
+				<figcaption align="middle">2 samples per pixel</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_dragon_s4.png" align="middle" width="400px" />
+				<figcaption align="middle">4 samples per pixel</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_dragon_s8.png" align="middle" width="400px" />
+				<figcaption align="middle">8 samples per pixel</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_dragon_s16.png" align="middle" width="400px" />
+				<figcaption align="middle">16 samples per pixel</figcaption>
+			</div>
+			<div>
+				<img src="images/p4/p4_dragon_s64.png" align="middle" width="400px" />
+				<figcaption align="middle">64 samples per pixel</figcaption>
+			</div>
+			<div id="third">
+				<img src="images/p4/p4_dragon_s1024.png" align="middle" width="400px" />
+				<figcaption align="middle">1024 samples per pixel</figcaption>
+			</div>
+				<figcaption id="third" align="middle">Figure 11. dragon.dae rendered with global illumination, varying samples per pixel, 4 samples per light, and a max ray depth of 10. </figcaption>
+		</div>
+	</div>
+
+<p>Overall, for best results with global illumination, we should be using a high sample rate to get rid of noise and a large max ray depth to get a bright and realistic render. The technique in the next section aims to help with the feasibility of using a high sample rate. </p>
+	<br></br>
+	<h2 align="middle">Part 5: Adaptive Sampling</h2>
+	<p> In the previous section, we saw that increasing sampling rate is one way to reduce the noise produced by Monte Carlo pathtracing. However, not all pixels converge at the same sampling rate, and we may be wasting power on continuing to sample a pixel that has already converged. Adaptive sampling addresses this problem by taking into account the convergence of pixels, and stopping sampling if a pixel has converged.<br></br>To implement adaptive sampling, in my loop over num_samples, I check if the current sample is the start of a new batch (except for the very first sample). I then calculate the mean and variance of the samples so far (I keep track of s1 and s2) and then use these to calculate I. If \(I \leq maxTolerance* \mu\), the pixel has converged and I break out of the sampling loop. Else, I continue with creating a new sample. I generate a new random ray, estimate radiance, calculate \(x_k\), add \(x_k\) to the s1 variable, and add \(x_k^2\) to the s2 variable. I then add the calculated radiance to the total radiance. After the loop, whether it ran to completion or ended early, I average the total radiance and update the sampleBuffer and sampleCountBuffer. In Figure 12, we can see the effect adaptive sampling has on our pathtracing algorithm/p>
+	<div align="middle">
+		<div class="figure_cont c2 border lines3">
+			<div>
+				<img src="images/p5/p5_CBbunny.png" align="middle" width="400px" />
+				<figcaption align="middle">Figure 12a. CBbunny.dae rendered with global illumination, 2048 maximum samples per pixel, 64 samples per batch, max tolerance of 0.05, 1 sample per light, and a max ray depth of 5..</figcaption>
+			</div>
+			<div>
+				<img src="images/p5/p5_CBbunny_rate.png" align="middle" width="400px" />
+				<figcaption align="middle">Figure 12b. Image showing the sample rate for every pixel of the render in 12a. Red represents a high sampling rate and blue represents a low sampling rate.</figcaption>
+			</div>
+
+		</div>
+	</div>
+	<p>We can see in Figure 12a that adaptive sampling was successful at eliminating noise in the image. In Figure 12b, we can pinpoint which areas took longer to converge and which areas were quick to converge. The red around the edges of the ceiling and on the underside, eye, and parts of the ear of the bunny indicate that these were difficult parts of the image, requiring a lot more samples to converge than the blue and green parts of the ceiling, walls, and bunny.
+	</p>
+</body>
+
 </html>

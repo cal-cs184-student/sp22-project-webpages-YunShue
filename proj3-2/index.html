@@ -1,7 +1,136 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 3-2 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+
+<head>
+	<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+	<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+	<title>CS 184 Pathtracer Part 2</title>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+	<link rel="stylesheet" type="text/css" href="./style.css">
+</head>
+
+<body>
+
+	<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2022</h1>
+	<h1 align="middle">Project 3-2: Pathtracer</h1>
+	<h2 align="middle">Yun Shue, CS184-abn</h2>
+
+	<br></br>
+	<div align='middle'>
+		<img src="images/cover.png" align="middle" width="480px" />
+	</div>
+	<br></br>
+
+	<h2 align="middle">Overview</h2>
+	<p>In Pathtracer Part 1, we built the foundation for rendering diffuse material objects with global illumination. In this part, we extend the functionality of our renderer to mirror, glass, and microfacet materials (I chose to implement Parts 1 and 2). In Part 1, we handle specular reflection and refraction, allowing us to render mirror and glass materials. The effect of multiple ray bounces in global illumination for glass objects was more apparent than that of objects with Lambertian surfaces. In Part 2, we handle microfacet models that are made of isotropic rough conductors. My approach to both parts was understanding what happens to a ray as it passes through the scene and intersects with an object of the material in question. Understanding the physics allowed me to appreciate how complex and realistic pathtracing with global illumination is compared to Blinn-Phong shading.</p>
+
+	<h2 align="middle">Part I: Mirror and Glass Materials</h2>
+
+	<p> In Part 1, I first implemented the BRDF for specular reflection. Perfect mirrors don't cause Lambertian falloff, so this function only changes the ray's direction with respect to the surface normal. I then implemented refraction, the case where a ray enters or exits a material. To do this, I used the spherical coordinate Snell's equations to derive the coordinates of the transmitted ray \(\omega_i\) from the coordinates of \(\omega_o\) and \(\eta\), the ratio of the old index of refraction to the new index of refraction. Now we are able to render materials that only reflect or only refract. However, to realistically render glass materials, we need to handle the case when both reflection and refraction occurs at an intersection. To model this, we use Schlick's approximation to estimate the ratio of reflection to refraction energy at an interaction. We return either the reflected or refracted ray based on a coin-flip probability given by this ratio.
+	</p>
+	<div class='fig'>
+		<div class="figure_cont c2 border">
+			<div>
+				<img src="images/p1_CBspheres_m0.png" align="middle" width="480" />
+				<figcaption align="middle">Max ray depth of 0.</figcaption>
+			</div>
+			<div>
+				<img src="images/p1_CBspheres_m1.png" align="middle" width="480" />
+				<figcaption align="middle">Max ray depth of 1.</figcaption>
+			</div>
+			<div>
+				<img src="images/p1_CBspheres_m2.png" align="middle" width="480" />
+				<figcaption align="middle">Max ray depth of 2.</figcaption>
+			</div>
+			<div>
+				<img src="images/p1_CBspheres_m3.png" align="middle" width="480" />
+				<figcaption align="middle">Max ray depth of 3.</figcaption>
+			</div>
+			<div>
+				<img src="images/p1_CBspheres_m4.png" align="middle" width="480" />
+				<figcaption align="middle">Max ray depth of 4.</figcaption>
+			</div>
+			<div>
+				<img src="images/p1_CBspheres_m100.png" align="middle" width="480" />
+				<figcaption align="middle">Max ray depth of 100.</figcaption>
+			</div>
+			<figcaption id="odd">Figure 1. CBspheres.dae rendered with 256 samples per pixel, 4 samples per light, and varying maximum ray depth.</figcaption>
+		</div>
+	</div>
+	<p>
+	In Figure 1 above, the left sphere is a mirror material and the right sphere is a glass material. Thus, the left sphere exhibits specular reflection only while the right sphere has both reflections and refractions. This lets us see how adding subsequent bounces to our pathtracing algorithm affects our render in interesting ways. <br></br> The first image has a max ray depth of 0 which is equivalent to zero-bounce illumination. We only see emissions from light sources. <br></br>With \(m=1\), we see the result of direct illumination: only rays from the light source contribute to irradiance at the spheres' surfaces. The glass sphere shows more noise in its reflection of the area light due to our use of Schlick's approximation to decide whether an incoming ray is reflected or refracted. Refractions result in darkness at this max depth because they require at least three bounces. <br></br>With \(m=2\), we see secondary bounces contributing to reflections on both spheres. The second sphere is darker and noisier once again due to our max depth and sampling via Schlick's approximation. <br></br>At \(m=3\) we finally start to see refractions in the glass sphere, as light is bent through the glass and concentrated below the sphere. We also see in the mirror sphere contributions from light bouncing off the sphere, onto the ceiling, and back onto the sphere. The reflection of the glass sphere in the mirror sphere is still dark, however, as contributions from rays refracted through the glass sphere require at least four bounces. <br></br>This can be seen with \(m=4\), where the glass sphere reflection in the mirror sphere is bright. We also see brightness at the bottom of the glass sphere due to light reflecting off the floor and onto the sphere. A light spot also appears on the wall next to the glass sphere likely due to rays from the light source reflecting off the mirror sphere, refracting twice through the glass sphere, and reflecting off the wall. <br></br>Finally, as we increase the max depth to 100, we see an even brighter scene to due contributions from more bounces. The reflections of the ceiling and ground in the mirror sphere appear to have more color due to these extra bounces.
+</p>
+
+	<h2 align="middle">Part 2: Microfacet Material</h2>
+
+	<p>In this part, I implemented microfacet BRDF and importance sampling to handle microfacet materials. The BRDF for microfacet materials relies on the shadowing-masking term, the Normal Distribution Function (NDF), and Fresnel term for air-conductor interfaces. Microfacets are specular meaning that a ray is only reflected if the half vector \(h\) determined by \(\omega_i\) and \(\omega_o\) lines up with the microfacet's normal. The NDF defines how these normals are distributed. For this project we use the Beckmann distribution, which includes an \(\alpha\) term representing the roughness of the macro surface. The effect of \(\alpha\) can be seen in Figure 2.</p>
+
+	<div class='fig'>
+		<div class="figure_cont c2 border">
+			<div>
+				<img src="images/p2_CBdragon_au_a005.png" align="middle" width="480px" />
+				<figcaption align="middle">\(\alpha = 0.005\)</figcaption>
+			</div>
+			<div>
+				<img src="images/p2_CBdragon_au_a05.png" align="middle" width="480px" />
+				<figcaption align="middle">\(\alpha = 0.05\)</figcaption>
+			</div>
+			<div>
+				<img src="images/p2_CBdragon_au_a25.png" align="middle" width="480px" />
+				<figcaption align="middle">\(\alpha = 0.25\)</figcaption>
+			</div>
+			<div>
+				<img src="images/p2_CBdragon_au_a5.png" align="middle" width="480px" />
+				<figcaption align="middle">\(\alpha = 0.5\)</figcaption>
+			</div>
+				<figcaption id="odd" align="middle">Figure 2. CBdragon_microfacet_au.dae rendered with 256 samples per pixel, 1 sample per light, max ray depth of 7, and with varying material roughness \(\alpha\). </figcaption>
+		</div>
+	</div>
+<p>We see in Figure 2 that as \(\alpha\) increases, so does the diffuse quality of the surface. A smaller \(\alpha\) means a smoother macro surface, approximating the appearance of a specular material. This is why we can see reflections of the walls, floor, and front black space more clearly in the dragon for \(\alpha =0.005\) and \(\alpha =0.05\). This gets harder to see as the material becomes less "shiny" with larger \(\alpha\) and approximates a diffuse reflective surface.<br></br>Additionally, I implemented importance sampling with respect to the Beckmann distribution. To sample a microfacet normal \(h\), we first sample \(\theta_h\) and \(\phi_h\) from pdfs \(p_{\theta}\) and \(p_{\phi}\) respectively and convert to Cartesian coordinates. We can then reflect \(\omega_o\) about the sampled \(h\) to get \(\omega_i\). This sampling scheme suits the Beckmann distribution much better and converges much faster than cosine hemisphere sampling. The differences can be seen in Figure 3.</p>
+<div class='fig'>
+	<div class="figure_cont c2 border">
+		<div>
+			<img src="images/p2_CBbunny_hemi.png" align="middle" width="480px" />
+			<figcaption align="middle">Cosine Hemisphere sampling</figcaption>
+		</div>
+		<div>
+			<img src="images/p2_CBbunny_imp.png" align="middle" width="480px" />
+			<figcaption align="middle">Importance sampling</figcaption>
+		</div>
+			<figcaption id="odd" align="middle">Figure 3. CBbunny_microfacet_cu.dae rendered with 128 samples per pixel, 1 sample per light, max ray depth of 7, and different sampling techniques. </figcaption>
+	</div>
+</div>
+<p>In the figure above, we see more noise is produced when we use cosine hemisphere sampling. This is due to the fact that many of the sampled rays result in half vectors that don't line up with microfacet normals, resulting in noise. Importance sampling according to the normal distribution used produces a much better result with minimal noise because we only consider rays that will be reflected by the microfacet.<br></br>Furthermore, I implemented an approximation of the Fresnel term for the BRDF. The Fresnel term for air-conductor interfaces is wavelength dependent. Thus, we approximate the Fresnel term for R, G, B channels separately at fixed wavelengths. The \(\eta\) and \(k\) terms in our approximation together represent an index of refraction for a material. I chose values corresponding to the index of refraction for Bismuth:</p>
+<div align="middle">
+	<table>
+		<tr>
+			<th class="head"></th>
+			<th>R (614 nm)</th>
+			<th>G (549 nm)</th>
+			<th>B (466 nm)</th>
+		</tr>
+		<tr>
+			<td class="head">\(\eta\)</td>
+			<td>2.2260</td>
+			<td>2.0273</td>
+			<td>1.7531</td>
+		</tr>
+		<tr>
+			<td class="head">\(k\)</td>
+			<td>3.0795</td>
+			<td>2.8541</td>
+			<td>2.5252</td>
+		</tr>
+	</table>
+</div>
+	<p>The result can be seen in the figure below.</p>
+<div class="fig border" align='middle'>
+	<img src="images/p2_CBdragon_bi.png" align="middle" width="480px" />
+	<figcaption>Figure 4. CBdragon rendered with refraction index values for bismuth and \(\alpha=0.5\). </figcaption>
+</div>
+	<br></br>
+</body>
+
 </html>
